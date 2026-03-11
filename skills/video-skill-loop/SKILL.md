@@ -211,7 +211,9 @@ After each loop iteration, append to PROGRESS.md under a new Exp section:
 - Phase 1 results are cached in `phase1_results.json` — don't re-run unless skills change
 - If a SLURM job crashes mid-Phase-1, re-run with `--phase 1`; it will resume from checkpoint
 
-## Current Skill Registry (10 skills)
+## Current Skill Registry (13 skills)
+
+### Sampling Skills (question-agnostic)
 
 | ID | Skill | Description |
 |----|-------|-------------|
@@ -225,3 +227,15 @@ After each loop iteration, append to PROGRESS.md under a new Exp section:
 | 8 | `coarse8_fine24` | 8f sparse + 24f dense motion zoom |
 | 9 | `multi_zoom_2segs` | 16f overview + top-2 motion segments zoom |
 | 10 | `spatial_zoom_32f` | motion zoom + 2× center crop magnification |
+
+### Grounding Skills (question-aware)
+
+| ID | Skill | Description |
+|----|-------|-------------|
+| 11 | `temporal_grounding` | Parse question for temporal cues (start/end/middle/before/after) → extract frames from inferred time range; fallback to motion-dense |
+| 12 | `spatial_grounding` | Parse question for spatial cues (left/right/top/bottom/center/sign/text...) → crop identified region from motion-dense frames; fallback to center crop |
+| 13 | `spatio_temporal_grounding` | Combines both: question → temporal range + spatial region → cropped frames. Most question-aware skill. |
+
+**Temporal cues parsed**: at the start / at the end / in the middle / before / after / throughout / initially / finally ...
+
+**Spatial cues parsed**: left/right/top/bottom, center, top-left/right, bottom-left/right, sign/text/label (→ upper region crop), background/foreground ...
