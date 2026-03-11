@@ -227,14 +227,16 @@ After each loop iteration, append to PROGRESS.md under a new Exp section:
 | 9 | `multi_zoom_2segs` | 16f overview + top-2 motion segments zoom |
 | 10 | `spatial_zoom_32f` | motion zoom + 2× center crop magnification |
 
-### Grounding Skills (question-aware)
+### Grounding Skills (two-pass, model-predicted localisation)
 
 | ID | Skill | Description |
 |----|-------|-------------|
-| 11 | `temporal_grounding` | Parse question for temporal cues (start/end/middle/before/after) → extract frames from inferred time range; fallback to motion-dense |
-| 12 | `spatial_grounding` | Parse question for spatial cues (left/right/top/bottom/center/sign/text...) → crop identified region from motion-dense frames; fallback to center crop |
-| 13 | `spatio_temporal_grounding` | Combines both: question → temporal range + spatial region → cropped frames. Most question-aware skill. |
+| 11 | `temporal_grounding` | **Pass 1**: 8 overview frames + "at what time does the key event occur? TIME: Xs to Ys" → parse `[start_sec, end_sec]` → **Pass 2**: dense frames from grounded interval |
+| 12 | `spatial_grounding` | **Pass 1**: keyframe + "where is the relevant region? REGION: x1=A y1=B x2=C y2=D" → parse bounding box `[x1,y1,x2,y2]` (0–1) → **Pass 2**: crop+magnify grounded region from motion-dense frames |
+| 13 | `spatio_temporal_grounding` | Single first pass predicts BOTH axes simultaneously (TIME + REGION); fallback to motion-dense + center crop if parse fails |
 
-**Temporal cues parsed**: at the start / at the end / in the middle / before / after / throughout / initially / finally ...
+**Key difference from naive keyword rules**: localisation is driven by the model's understanding of the video content, not fixed mappings. Each video/question pair gets its own `[start_sec, end_sec]` and `[x1,y1,x2,y2]`.
 
-**Spatial cues parsed**: left/right/top/bottom, center, top-left/right, bottom-left/right, sign/text/label (→ upper region crop), background/foreground ...
+**Response format expected from model**:
+- Temporal: `TIME: 12.0s to 28.5s`
+- Spatial:  `REGION: x1=0.1 y1=0.05 x2=0.55 y2=0.6`
