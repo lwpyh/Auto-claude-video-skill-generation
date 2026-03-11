@@ -1,8 +1,7 @@
 ---
 name: video-skill-loop
 description: Autonomous video skill learning loop for training-free VQA improvement. Checks job status, analyzes per-skill accuracy, induces routing rules, launches next iteration. Use when user says "check skill loop", "skill loop results", "run skill loop", "video skill learning", or wants to iterate the skill discovery pipeline.
-argument-hint: [phase or focus area, e.g. "check results" / "new iteration" / "phase1"]
-allowed-tools: Bash(*), Read, Grep, Glob, Write, Edit, Agent
+argument-hint: "phase or focus area, e.g. check results / new iteration / phase1"
 ---
 
 # Video Skill Learning Loop
