@@ -1,7 +1,7 @@
 ---
 name: video-skill-loop
 description: Autonomous video skill learning loop for training-free VQA improvement. Checks job status, analyzes per-skill accuracy, induces routing rules, launches next iteration. Use when user says "check skill loop", "skill loop results", "run skill loop", "video skill learning", or wants to iterate the skill discovery pipeline.
-argument-hint: "phase or focus area, e.g. check results / new iteration / phase1"
+argument-hint: "phase or focus area, e.g. check results / new iteration / submit job"
 ---
 
 # Video Skill Learning Loop
@@ -13,8 +13,8 @@ argument-hint: "phase or focus area, e.g. check results / new iteration / phase1
 ## Core Idea
 
 Instead of post-training, we:
-1. Try multiple video sampling strategies (skills) on a discovery set with known ground truth
-2. Learn **which questions benefit from which skill** via correctness signal + TF-IDF + LLM rule induction
+1. Try multiple video tool strategies (skills) on a discovery set with known ground truth
+2. Learn **which questions benefit from which skill** via correctness signal + TF-IDF analysis
 3. Build a routing policy: new question arrives → router selects skill → single inference → answer
 
 No gradient updates. Only the routing policy is learned from data.
@@ -25,14 +25,15 @@ No gradient updates. Only the routing policy is learned from data.
 
 ```
 PROJECT:    /data/DERI-Gong/jh015/lmms-eval
-SKILLS:     skill_learning/skills.py        (10 skill variants)
-INDUCER:    skill_learning/inducer.py       (TF-IDF + Qwen2.5-7B rule synthesis)
-ROUTER:     skill_learning/router.py        (routing logic)
-LOOP:       skill_learning/loop.py          (Phase 1/2/3 orchestration)
-SLURM:      run_skill_loop.sh               (8h job)
+TOOLS:      skill_learning/tools/sampling.py   (6 sampling strategies)
+            skill_learning/tools/temporal.py   (Claude API temporal grounding)
+            skill_learning/tools/spatial.py    (Claude API spatial grounding)
+EVAL LOOP:  skill_learning/eval_loop.py        (run all 9 tools × N samples)
+ANALYZER:   skill_learning/analyze.py          (effective cases + routing rules)
+SLURM:      run_skill_loop.sh                  (8h job, GPU)
 LOGS:       logs/skill_loop_*/
 DATA:       eval_deltaS_v2.jsonl (1602 samples)
-VIDEOS:     /data/DERI-Gong/jh015/VideoZoomer/General_Video/
+VIDEOS:     /data/DERI-Gong/jh015/VideoZoomer/
 ```
 
 ---
@@ -50,150 +51,143 @@ ls -lt /data/DERI-Gong/jh015/lmms-eval/logs/ | grep skill_loop | head -5
 
 # Check SLURM output for errors or progress
 tail -50 /data/DERI-Gong/jh015/lmms-eval/slurm-<JOBID>.out
+
+# Check checkpoint progress
+wc -l /data/DERI-Gong/jh015/lmms-eval/logs/skill_loop_<TS>/results.json
 ```
 
 Determine state:
-- **Still running** → check progress (how many samples done in Phase 1), report ETA
+- **Still running** → check how many samples done, report ETA
 - **Crashed** → read error, diagnose, fix, resubmit
-- **Phase 1 done, awaiting Phase 2** → run induction manually if needed
-- **All phases done** → go to Step 2
+- **Results done** → run analyze.py → go to Step 2
 
 ---
 
-### Step 2: Parse Phase 1 Results (Per-Skill Accuracy Matrix)
+### Step 2: Parse Results (Per-Tool Accuracy Matrix)
 
 ```bash
-cat /data/DERI-Gong/jh015/lmms-eval/logs/skill_loop_<TS>/phase1_results.json
+# Run analysis
+/data/home/acw652/.conda/envs/verl-tool-env/bin/python \
+    /data/DERI-Gong/jh015/lmms-eval/skill_learning/analyze.py \
+    /data/DERI-Gong/jh015/lmms-eval/logs/skill_loop_<TS>/results.json
+
+# Or read pre-saved analysis
+cat /data/DERI-Gong/jh015/lmms-eval/logs/skill_loop_<TS>/analysis.json
 ```
 
 Build accuracy table:
 ```
-Skill               Acc    vs Baseline   Effective Cases   Regressions
-uniform_32f         XX.X%  (baseline)    —                 —
-uniform_16f         XX.X%  +/-X.X%       N                 N
-uniform_64f         XX.X%  +/-X.X%       N                 N
-pipeline_16_16      XX.X%  +/-X.X%       N                 N
-motion_zoom_32f     XX.X%  +/-X.X%       N                 N
-keyframe_32f        XX.X%  +/-X.X%       N                 N
-first_last_32f      XX.X%  +/-X.X%       N                 N
-coarse8_fine24      XX.X%  +/-X.X%       N                 N
-multi_zoom_2segs    XX.X%  +/-X.X%       N                 N
-spatial_zoom_32f    XX.X%  +/-X.X%       N                 N
+Tool                          Acc     Gain    Eff   Reg
+uniform_32f (baseline)        XX.X%   —       —     —
+uniform_16f                   XX.X%   +/-X.X% N     N
+uniform_64f                   XX.X%   +/-X.X% N     N
+motion_dense_32f              XX.X%   +/-X.X% N     N
+keyframe_32f                  XX.X%   +/-X.X% N     N
+first_last_32f                XX.X%   +/-X.X% N     N
+temporal_grounding            XX.X%   +/-X.X% N     N
+spatial_grounding             XX.X%   +/-X.X% N     N
+spatio_temporal_grounding     XX.X%   +/-X.X% N     N
 ```
 
 **Key signals**:
-- Skills with gain > +3% AND effective_cases >= 10 → strong candidates for routing
-- Skills with large regressions → avoid using broadly
-- If NO skill beats baseline by >1% → loop needs redesign (see Decision Gate)
+- Tools with gain > +3% AND effective_cases >= 10 → strong candidates for routing
+- Tools with large regressions → avoid using broadly
+- If NO tool beats baseline by >1% → skill space needs redesign (see Decision Gate)
 
 ---
 
-### Step 3: Parse Phase 2 Rules
+### Step 3: Review Routing Rules from Analysis
 
 ```bash
-cat /data/DERI-Gong/jh015/lmms-eval/logs/skill_loop_<TS>/phase2_rules.json
+cat /data/DERI-Gong/jh015/lmms-eval/logs/skill_loop_<TS>/analysis.json | python3 -c "
+import json, sys
+a = json.load(sys.stdin)
+for rule in a['routing_rules']:
+    print(f\"{rule['tool']}: gain={rule['gain']:+.1%} eff={rule['n_effective']} type_lift={rule['type_lift']}\")
+    print(f\"  keywords: {rule['tfidf_keywords'][:6]}\")
+"
 ```
 
-For each rule, note:
-- `routing_condition`: what question types / keywords trigger it
-- `gain`: expected accuracy improvement
-- `llm_rule`: human-readable rule from Qwen2.5-7B
-- `n_effective`: how many training samples support the rule
+For each routing rule, note:
+- `type_lift`: which question types (temporal/spatial/detail/counting/action/causal) this tool helps
+- `tfidf_keywords`: question words that predict this tool is effective
+- `n_effective`: training samples supporting this rule
 
 Evaluate rule quality:
-- **Good rule**: n_effective >= 8, gain > 0.03, routing_condition is specific and interpretable
-- **Weak rule**: n_effective < 5 or routing_condition is empty
-- **Conflicting rules**: two skills both claim the same question type → check which has higher precision
+- **Good rule**: n_effective >= 8, gain > 0.03, type_lift has entries > 1.5×
+- **Weak rule**: n_effective < 5 or no type_lift signal
 
 ---
 
-### Step 4: Parse Phase 3 Router Evaluation
+### Step 4: Decision Gate
 
-```bash
-cat /data/DERI-Gong/jh015/lmms-eval/logs/skill_loop_<TS>/final_summary.json
-cat /data/DERI-Gong/jh015/lmms-eval/logs/skill_loop_<TS>/phase3_routing_log.json
-```
+#### If best_tool_gain > +3% (meaningful):
+→ **Build simple routing policy**
+- Temporal questions → `temporal_grounding`
+- Spatial questions → `spatial_grounding`
+- Complex questions → `spatio_temporal_grounding`
+- Others → `uniform_32f` (baseline)
+- Update PROGRESS.md, consider VideoMME eval
 
-Report:
-```
-Baseline accuracy (uniform_32f):  XX.X%
-Router accuracy:                  XX.X%
-Gain:                             +X.X%
-
-Routing breakdown:
-  Skill X selected N times → accuracy Y%
-  Skill Y selected N times → accuracy Y%
-  Fallback (baseline) N times
-```
-
----
-
-### Step 5: Decision Gate
-
-#### If router_accuracy > baseline + 2% (meaningful gain):
-→ **Proceed to VideoMME**
-- Update PROGRESS.md with results
-- Submit VideoMME eval job:
-  ```bash
-  # (to be designed — use router as the model wrapper in lmms-eval)
-  ```
-
-#### If 0% < gain <= 2% (marginal):
-→ **Iterate: refine rules or add new skills**
-- Identify which question categories the router is mis-routing
-- Add new skill variant targeting that category
-- Re-run Phase 1 (can reuse cached results, only run new skill)
+#### If 0% < gain <= 3% (marginal):
+→ **Iterate: add more targeted skills**
+- Check which question types no tool handles well
+- Add new skill variant (e.g., CLIP-based retrieval, question-guided zoom)
+- Re-run eval with `--tools <new_tool>` (checkpoint resumes existing tools)
 
 #### If gain <= 0% (no improvement):
-→ **Redesign: skills are not diverse enough or routing signal is weak**
-
-Diagnose by checking:
+→ **Diagnose: check improvable samples**
 ```python
-# What fraction of samples have ANY skill that beats baseline?
-n_improvable = count samples where max(all_skills) > baseline
+# Load results.json and check
+import json
+results = json.load(open("results.json"))
+tools = list(results.keys())
+all_ids = list(results["uniform_32f"].keys())
+improvable = [sid for sid in all_ids
+              if any(results[t][sid]["correct"] for t in tools
+                     if not results["uniform_32f"][sid]["correct"])]
+print(f"Improvable: {len(improvable)} / {len(all_ids)} = {len(improvable)/len(all_ids):.1%}")
+```
+If < 15% improvable → skill space fundamentally insufficient
+
+---
+
+### Step 5: Submit Job
+
+```bash
+# Check ANTHROPIC_API_KEY is set
+echo $ANTHROPIC_API_KEY
+
+# Export key and submit
+export ANTHROPIC_API_KEY=<key>
+sbatch /data/DERI-Gong/jh015/lmms-eval/run_skill_loop.sh
 ```
 
-If n_improvable < 20% of training set → the skill space needs fundamentally new approaches.
-
-**New skill ideas to try** (implement in `skill_learning/skills.py`):
-- `clip_frame_retrieval`: CLIP cosine similarity between question text and video frames
-- `question_guided_zoom`: extract nouns from question, find frames where those objects appear (requires OWL-ViT or similar)
-- `temporal_segment_reasoning`: divide video into 4 equal segments, run 8f per segment, combine
-- `reverse_chronological`: sample frames in reverse order (emphasizes ending)
+The SLURM script runs `eval_loop.py` which:
+- Checkpoints every 10 samples to `results.json`
+- Resumes automatically if resubmitted
+- Runs all 9 tools × N samples
 
 ---
 
-### Step 6: If Iterating — Add New Skill and Re-run
+### Step 6: Update PROGRESS.md
 
-1. Implement new skill in `skill_learning/skills.py`, add to `SKILL_REGISTRY`
-2. If reusing Phase 1 cache, just run Phase 1 for the new skill only:
-   ```bash
-   # Modify run_skill_loop.sh to --skills <new_skill_name> and --phase 1
-   # Then merge results with existing phase1_results.json
-   ```
-3. Re-run Phase 2 (induction) on merged results
-4. Re-run Phase 3 (router evaluation)
+```bash
+# After each iteration
+cat >> /data/DERI-Gong/jh015/lmms-eval/PROGRESS.md << 'EOF'
 
-Increment loop counter. Document each iteration in PROGRESS.md.
-
----
-
-### Step 7: Update PROGRESS.md
-
-After each loop iteration, append to PROGRESS.md under a new Exp section:
-
-```markdown
 ### Skill Loop Iteration N (Job XXXXXX, logs/skill_loop_<TS>)
 
-| Skill                | Train Acc | vs Baseline |
-|----------------------|-----------|-------------|
-| uniform_32f (base)   | XX.X%     | —           |
-| best_skill           | XX.X%     | +X.X%       |
-| ...                  |           |             |
+| Tool                         | Acc   | vs Baseline |
+|------------------------------|-------|-------------|
+| uniform_32f (baseline)       | XX.X% | —           |
+| temporal_grounding           | XX.X% | +X.X%       |
+| spatial_grounding            | XX.X% | +X.X%       |
+| spatio_temporal_grounding    | XX.X% | +X.X%       |
 
-**Induced Rules**: [summary]
-**Router Val Acc**: XX.X% vs Baseline XX.X% (Gain: +X.X%)
-**Decision**: [proceed to VideoMME / iterate with new skills / redesign]
+**Top Routing Rules**: [summary from analysis.json]
+**Decision**: [proceed to VideoMME / iterate / redesign]
+EOF
 ```
 
 ---
@@ -201,42 +195,42 @@ After each loop iteration, append to PROGRESS.md under a new Exp section:
 ## Key Rules
 
 - Baseline is always `uniform_32f` (32 uniform frames, no tools)
-- VQA metric = answer letter match (A/B/C/D/E), not delta_s
-- delta_s signal is IGNORED — correctness is the only signal
+- VQA metric = answer letter match (A/B/C/D/E), **not delta_s** (delta_s is IGNORED)
 - Never modify model parameters
-- Skills are purely video preprocessing + frame selection strategies
-- A "skill" = a function (video_path, question) → framing strategy for the model
-- LLM (Qwen2.5-7B) used only for rule synthesis in Phase 2, never for routing at inference time
-- Phase 1 results are cached in `phase1_results.json` — don't re-run unless skills change
-- If a SLURM job crashes mid-Phase-1, re-run with `--phase 1`; it will resume from checkpoint
+- A "tool" = function `(video_path, question) → {"frames": [...], "meta": {...}}`
+- Grounding tools use **Anthropic Claude API** (claude-haiku-4-5-20251001) — no local HuggingFace models
+- `results.json` checkpointed every 10 samples — safe to resume after crash
+- Analysis → `analysis.json` in same log dir
 
-## Current Skill Registry (13 skills)
+---
 
-### Sampling Skills (question-agnostic)
+## Current Tool Registry (9 tools)
 
-| ID | Skill | Description |
-|----|-------|-------------|
-| 1 | `uniform_32f` | 32 uniform frames (baseline) |
-| 2 | `uniform_16f` | 16 uniform frames |
-| 3 | `uniform_64f` | 64 uniform frames |
-| 4 | `pipeline_16_16` | 16f overview + motion-dense zoom 16f |
-| 5 | `motion_zoom_32f` | 32f all in most-active segment |
-| 6 | `keyframe_32f` | 32 histogram-diff keyframes |
-| 7 | `first_last_32f` | 16 first + 16 last frames |
-| 8 | `coarse8_fine24` | 8f sparse + 24f dense motion zoom |
-| 9 | `multi_zoom_2segs` | 16f overview + top-2 motion segments zoom |
-| 10 | `spatial_zoom_32f` | motion zoom + 2× center crop magnification |
+### Category 1: Sampling Tools (question-agnostic, no API)
 
-### Grounding Skills (two-pass, model-predicted localisation)
+| Tool | Description |
+|------|-------------|
+| `uniform_16f` | 16 uniformly-spaced frames |
+| `uniform_32f` | **32 uniformly-spaced frames (BASELINE)** |
+| `uniform_64f` | 64 uniformly-spaced frames |
+| `motion_dense_32f` | 32 frames from highest-motion 3s window |
+| `keyframe_32f` | 32 histogram-diff keyframes |
+| `first_last_32f` | 16 first + 16 last frames |
 
-| ID | Skill | Description |
-|----|-------|-------------|
-| 11 | `temporal_grounding` | **Pass 1**: 8 overview frames + "at what time does the key event occur? TIME: Xs to Ys" → parse `[start_sec, end_sec]` → **Pass 2**: dense frames from grounded interval |
-| 12 | `spatial_grounding` | **Pass 1**: keyframe + "where is the relevant region? REGION: x1=A y1=B x2=C y2=D" → parse bounding box `[x1,y1,x2,y2]` (0–1) → **Pass 2**: crop+magnify grounded region from motion-dense frames |
-| 13 | `spatio_temporal_grounding` | Single first pass predicts BOTH axes simultaneously (TIME + REGION); fallback to motion-dense + center crop if parse fails |
+### Category 2: Temporal Grounding (Claude API)
 
-**Key difference from naive keyword rules**: localisation is driven by the model's understanding of the video content, not fixed mappings. Each video/question pair gets its own `[start_sec, end_sec]` and `[x1,y1,x2,y2]`.
+| Tool | Description |
+|------|-------------|
+| `temporal_grounding` | **Pass 1**: send 8 overview frames + question to Claude API → parse `TIME: Xs to Ys` → **Pass 2**: extract 24 dense frames from predicted interval. Fallback: motion-dense window. |
 
-**Response format expected from model**:
+### Category 3: Spatial Grounding (Claude API)
+
+| Tool | Description |
+|------|-------------|
+| `spatial_grounding` | **Pass 1**: send highest-motion frame + question to Claude API → parse `REGION: x1=A y1=B x2=C y2=D` (normalised 0-1) → **Pass 2**: crop+magnify that region from 32 uniform frames. Fallback: center crop. |
+| `spatio_temporal_grounding` | Temporal first → spatial on those frames. 2 API calls. Most targeted. |
+
+**API model**: `claude-haiku-4-5-20251001` (fast + cheap, vision-capable)
+**Response formats**:
 - Temporal: `TIME: 12.0s to 28.5s`
-- Spatial:  `REGION: x1=0.1 y1=0.05 x2=0.55 y2=0.6`
+- Spatial:  `REGION: x1=0.10 y1=0.05 x2=0.55 y2=0.60`
