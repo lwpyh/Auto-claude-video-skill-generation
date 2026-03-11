@@ -2,27 +2,11 @@
 
 [English](README.md) | 中文版
 
-![分数曲线](auto_review_score_curve.png)
-
-> 🌙 **让 Claude Code 在你睡觉时做科研。** 醒来发现论文已被打分、弱点已被定位、实验已跑完、叙事已重写——全自动。
+> 🎬 **Video VQA Skill 自主发现** —— Claude Code 自主探索帧采样策略与 Prompt 策略的最优组合，无需微调模型即可提升视频问答准确率。
 >
-> 🎬 **新增：Video VQA Skill 自主发现** —— Claude Code 自主探索帧采样策略与 Prompt 策略的最优组合，无需微调模型即可提升视频问答准确率。
+> 🌙 **自动科研循环** —— 让 Claude Code 通过 Codex MCP 自动 review 论文、修复弱点、过夜迭代。
 
 基于 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 的自定义 Skills，用于自主 ML 科研工作流。核心机制是**跨模型协作**——Claude Code 负责执行（读文件、写代码、跑实验、收结果），外部 LLM（通过 [Codex MCP](https://github.com/openai/codex)）负责评审（打分、找弱点、建议修复）。两个模型互不评自己的作业，形成真正的反馈循环。
-
-## 📈 真实运行效果
-
-某 ML 研究项目上的 4 轮自动循环，从 borderline reject 到可投稿：
-
-| 轮次 | 分数 | 发生了什么 |
-|------|------|-----------|
-| 初始 | 5.0/10 | Borderline reject |
-| 第 1 轮 | 6.5/10 | 补了标准指标，发现指标脱钩 |
-| 第 2 轮 | 6.8/10 | 核心声明不可复现，转换叙事 |
-| 第 3 轮 | 7.0/10 | 大规模 seed 研究推翻了主要改善声明 |
-| 第 4 轮 | **7.5/10** ✅ | 诊断证据确立，**可以投稿** |
-
-循环自主跑了 **20+ 个 GPU 实验**，重写了论文叙事框架，杀掉了经不住检验的声明——全程无人干预。
 
 ---
 
@@ -51,8 +35,6 @@
 - 🪞 **不隐藏弱点** — 明确规则："不要隐藏弱点来骗高分"
 - 🔧 **先修后审** — 必须实现修复后再重新 review，不能只承诺修
 
-📝 **博客：** [开源 | 睡觉 Claude 自动跑实验改文](http://xhslink.com/o/5cBMTDigNXz)
-
 ### 工作流 2：文献调研与找 Idea 🔍
 
 > "这个领域最新进展是什么？哪里有 gap？"
@@ -66,9 +48,7 @@
 4. 根据反馈迭代
 ```
 
-📝 **博客：** [Claude Code 两月 NeurIPS 指北](http://xhslink.com/o/7IvAJQ41IBA)
-
-### 工作流 3：Video VQA Skill 自主发现 🎬 *（新增）*
+### 工作流 3：Video VQA Skill 自主发现 🎬
 
 > "自动找出让视频问答模型准确率最高的帧采样 + Prompt 策略组合。"
 
@@ -243,16 +223,6 @@ Skills 就是普通的 Markdown 文件，fork 后随意改：
 - [ ] **VideoMME 评估** — 在标准 benchmark 上验证最优 skill
 - [ ] **GLM-5（执行者）+ Minimax-2.1（评审者）** — 与 Claude Code + Codex 平行的跨模型组合
 - [ ] 更多执行者 × 评审者组合（Gemini、DeepSeek 等）
-
-## 💬 交流群
-
-欢迎加入微信群，交流 Claude Code + AI 科研工作流：
-
-<img src="wechat_group.jpg" alt="微信交流群二维码" width="300">
-
-## ⭐ Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=lwpyh/Auto-claude-video-skill-generation&type=Date)](https://star-history.com/#lwpyh/Auto-claude-video-skill-generation&Date)
 
 ## License
 

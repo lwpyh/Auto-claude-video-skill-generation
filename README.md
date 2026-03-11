@@ -2,27 +2,11 @@
 
 [中文版 README](README_CN.md) | English
 
-![Score Progression](auto_review_score_curve.png)
-
-> 🌙 **Let Claude Code do research while you sleep.** Wake up to find your paper scored, weaknesses identified, experiments run, and narrative rewritten — autonomously.
+> 🎬 **Video VQA Skill Discovery** — Claude Code autonomously discovers frame sampling + prompting strategies that improve video QA accuracy, with zero model fine-tuning.
 >
-> 🎬 **New: Video VQA Skill Discovery** — Claude Code autonomously discovers frame sampling + prompting strategies that improve video QA accuracy, with zero model fine-tuning.
+> 🌙 **Auto Research Loop** — Let Claude Code review your paper, fix weaknesses, and iterate overnight via Codex MCP.
 
 Custom [Claude Code](https://docs.anthropic.com/en/docs/claude-code) skills for autonomous ML research workflows. These skills orchestrate **cross-model collaboration** — Claude Code drives the research while an external LLM (via [Codex MCP](https://github.com/openai/codex)) acts as a critical reviewer.
-
-## 📈 Score Progression (Real Run)
-
-A real overnight 4-round run on an ML research project, from borderline reject to submission-ready:
-
-| Round | Score | What Happened |
-|-------|-------|---------------|
-| Initial | 5.0/10 | Borderline reject |
-| Round 1 | 6.5/10 | Added standard metrics, discovered metric decoupling |
-| Round 2 | 6.8/10 | Key claim failed to reproduce, pivoted narrative |
-| Round 3 | 7.0/10 | Large seed study killed main improvement claim |
-| Round 4 | **7.5/10** ✅ | Diagnostic evidence solidified, **submission ready** |
-
-The loop autonomously ran **20+ GPU experiments**, rewrote the paper's narrative framing, and killed claims that didn't hold up — all without human intervention.
 
 ---
 
@@ -62,8 +46,6 @@ The loop autonomously ran **20+ GPU experiments**, rewrote the paper's narrative
 - 🪞 **No hiding weaknesses** — explicit rule: "Do NOT hide weaknesses to game a positive score"
 - 🔧 **Fix before re-review** — must actually implement fixes before resubmitting; no empty promises
 
-📝 **Blog post:** [开源 | 睡觉 Claude 自动跑实验改文](http://xhslink.com/o/5cBMTDigNXz)
-
 ### Workflow 2: Literature & Idea Discovery 🔍
 
 > **"What's the state of the art? Where are the gaps?"**
@@ -77,9 +59,7 @@ The loop autonomously ran **20+ GPU experiments**, rewrote the paper's narrative
 
 **Skills involved:** `research-lit` + `research-review`
 
-📝 **Blog post:** [Claude Code 两月 NeurIPS 指北](http://xhslink.com/o/7IvAJQ41IBA)
-
-### Workflow 3: Video VQA Skill Discovery 🎬 *(New)*
+### Workflow 3: Video VQA Skill Discovery 🎬
 
 > **"Find which video sampling + prompting strategies improve my VLM's accuracy — automatically."**
 
@@ -257,16 +237,6 @@ Skills are plain Markdown files. Fork and customize:
 - [ ] **VideoMME evaluation** — validate best skills on standard benchmark
 - [ ] **GLM-5 (executor) + Minimax-2.1 (reviewer)** — alternative cross-model pair
 - [ ] More executor × reviewer combinations (Gemini, DeepSeek, etc.)
-
-## 💬 Community
-
-Join the WeChat group for discussion on Claude Code + AI-driven research workflows:
-
-<img src="wechat_group.jpg" alt="WeChat Group QR Code" width="300">
-
-## ⭐ Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=lwpyh/Auto-claude-video-skill-generation&type=Date)](https://star-history.com/#lwpyh/Auto-claude-video-skill-generation&Date)
 
 ## License
 
